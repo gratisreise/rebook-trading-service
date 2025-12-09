@@ -10,7 +10,7 @@ import com.example.rebooktradingservice.model.TradingResponse;
 import com.example.rebooktradingservice.passport.PassportUser;
 import com.example.rebooktradingservice.service.TradingReader;
 import com.example.rebooktradingservice.service.TradingService;
-import com.rebook.passport.PassportProto;
+import com.rebook.passport.PassportProto.Passport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
@@ -41,7 +41,7 @@ public class TradingController {
 
 
     @GetMapping("/test")
-    public String test(@PassportUser PassportProto.Passport passport){
+    public String test(@PassportUser Passport passport){
         return passport.toString();
     }
 

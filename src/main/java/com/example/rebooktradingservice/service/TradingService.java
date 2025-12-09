@@ -8,11 +8,16 @@ import com.example.rebooktradingservice.exception.CUnauthorizedException;
 import com.example.rebooktradingservice.feigns.BookClient;
 import com.example.rebooktradingservice.model.TradingRequest;
 import com.example.rebooktradingservice.model.TradingResponse;
+import com.example.rebooktradingservice.model.entity.Outbox;
 import com.example.rebooktradingservice.model.entity.Trading;
 import com.example.rebooktradingservice.model.entity.compositekey.TradingUserId;
 import com.example.rebooktradingservice.model.message.NotificationTradeMessage;
+import com.example.rebooktradingservice.repository.OutBoxRepository;
 import com.example.rebooktradingservice.repository.TradingRepository;
 import com.example.rebooktradingservice.repository.TradingUserRepository;
+import com.example.rebooktradingservice.utils.NotificationPublisher;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +37,9 @@ public class TradingService {
     private final TradingReader tradingReader;
     private final BookClient bookClient;
     private final S3Service s3Service;
-    private final NotificationPublisher publisher;
     private final TradingUserRepository tradingUserRepository;
-    private final ResponseService responseService;
+    private final OutBoxRepository outBoxRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public void postTrading(TradingRequest request, String userId, MultipartFile file) throws IOException {
@@ -45,8 +50,14 @@ public class TradingService {
         //거래생성 메세지 발행
         String content = "찜한 도서의 새로운 거래가 등록되었습니다.";
         NotificationTradeMessage message = new NotificationTradeMessage(trading.getId(), content, request.getBookId());
-        log.info("메세지 전송완료");
-        publisher.sendNotification(message);
+        saveOutBox(message);
+    }
+
+    private void saveOutBox(NotificationTradeMessage message) throws JsonProcessingException {
+        String payload  = objectMapper.writeValueAsString(message);
+        Outbox outBox = new Outbox();
+        outBox.setPayload(payload);
+        outBoxRepository.save(outBox);
     }
 
     public TradingResponse getTrading(String userId, Long tradingId) {
@@ -73,11 +84,12 @@ public class TradingService {
             log.error("Unauthorized updateState Access");
             throw new CUnauthorizedException("Unauthorized user Access");
         }
+
         if(request.getPrice() != trading.getPrice()) {
             String content = "찜한 제품의 가격이 변동되었습니다.";
             NotificationTradeMessage message =
                 new NotificationTradeMessage(tradingId, content, request.getBookId());
-            publisher.sendNotification(message);
+            saveOutBox(message);
         }
 
         if(file != null){
