@@ -6,7 +6,7 @@ plugins {
     id 'jacoco'
 }
 
-group = 'com.trading-service' // 프로젝트 그룹(패키지 네임)
+group = 'com.trade' // 프로젝트 그룹(패키지 네임)
 version = '0.0.1-SNAPSHOT' // 프로젝트 버전
 
 java {
@@ -34,46 +34,44 @@ ext {
 
 dependencies {
     // ====== 모니터링 및 장애 추적 ======
-    implementation 'org.springframework.boot:spring-boot-starter-actuator' // 모니터링/헬스체크
-    implementation 'io.sentry:sentry-spring-boot-starter-jakarta' // Sentry 연동 (에러 트래킹)
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus' // Prometheus 모니터링 연동
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.sentry:sentry-spring-boot-starter-jakarta'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
-// ====== 웹 및 REST API ======
-    implementation 'org.springframework.boot:spring-boot-starter-web' // 웹 MVC (REST API)
-    implementation 'org.springframework.boot:spring-boot-starter-validation' // Bean Validation
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    // ====== 웹 및 REST API ======
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-// ====== 데이터베이스 및 JPA ======
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa' // JPA (DB 연동)
-    runtimeOnly 'org.postgresql:postgresql' // PostgreSQL JDBC 드라이버
+    // ====== 데이터베이스 및 JPA ======
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'org.postgresql:postgresql'
 
-// ====== 메시징 및 AMQP ======
-    implementation 'org.springframework.boot:spring-boot-starter-amqp' // RabbitMQ 연동
+    // ====== 메시징 및 AMQP ======
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
-// ====== 클라우드/마이크로서비스 연동 ======
-    implementation 'org.springframework.cloud:spring-cloud-starter-config' // Spring Cloud Config 클라이언트
-    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client' // Eureka 서비스 디스커버리 클라이언트
-    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign' // OpenFeign (HTTP 클라이언트)
+    // ====== 클라우드/마이크로서비스 연동 ======
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
-// ===== 캐싱 ====
+    // ===== 캐싱 ====
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-// ===== s3 ====
-    implementation platform('software.amazon.awssdk:bom:2.27.21') // 최신 버전은 Maven Central에서 확인
+    // ===== s3 ====
+    implementation platform('software.amazon.awssdk:bom:2.27.21')
     implementation 'software.amazon.awssdk:s3'
 
     //공통라이브러리
     implementation "com.rebook:passport-common:1.0.0"
 
-// ====== 개발 편의성 ======
-    compileOnly 'org.projectlombok:lombok' // Lombok (컴파일 시에만 필요)
-    annotationProcessor 'org.projectlombok:lombok' // Lombok 애노테이션 프로세서
-    developmentOnly 'org.springframework.boot:spring-boot-devtools' // 개발용 자동 리로드
+    // ====== 개발 편의성 ======
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
 
-// ====== 테스트 ======
-    testImplementation 'org.springframework.boot:spring-boot-starter-test' // 테스트용 스프링 부트 스타터
-    testImplementation 'org.springframework.amqp:spring-rabbit-test' // RabbitMQ 테스트 유틸리티
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher' // JUnit 플랫폼 런처 (테스트 실행)
+    // ====== 테스트 ======
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.amqp:spring-rabbit-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 // 의존성 버전 일괄 관리(BOM) 설정
@@ -87,15 +85,6 @@ dependencyManagement {
 // 테스트 실행 시 JUnit Platform 사용
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy 'jacocoTestReport' // 테스트 후 리포트 생성
-}
-
-jacocoTestReport {
-    reports {
-        html.required = true // HTML 리포트 생성
-        xml.required = false
-        csv.required = false
-    }
 }
 
 repositories {

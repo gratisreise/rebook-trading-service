@@ -36,5 +36,5 @@ out/
 ### VS Code ###
 .vscode/
 GEMINI.md
-CLAUDE.md
+.claude/CLAUDE.md
 Rebook_trading-service.json
