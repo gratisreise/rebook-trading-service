@@ -17,6 +17,10 @@ bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
 
+
+.serena
+.claudedocs
+
 ### IntelliJ IDEA ###
 .idea
 *.iws

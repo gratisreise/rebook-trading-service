@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @FeignClient(name = "book-service")
 public interface BookClient {
-    @GetMapping("/api/books/recommendations/{userId}")
+    @GetMapping("/internal/books/recommendations/{userId}")
     List<Long> getRecommendedBooks(@PathVariable String userId);
 }
