@@ -1,0 +1,30 @@
+language: ko
+
+reviews:
+  profile: "chill"  # 과한 리뷰 줄이기 (strict 대신 chill 추천)
+
+  request_changes_workflow: false
+
+  high_level_summary: true
+  poem: false
+
+  review_status: true
+
+  collapse_walkthrough: true
+
+  path_filters:
+    - "!**/*.md"
+    - "!**/*.txt"
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  instructions: |
+    아래 기준으로만 코드 리뷰를 수행하세요.
+
+    1. 코드 스타일, 포맷팅, 네이밍에 대한 지적은 하지 마세요.
+    2. 비즈니스 로직의 문제, 비효율적인 흐름, 잠재적인 버그 위주로 리뷰하세요.
+    3. 보안 취약점(인증, 인가, 입력값 검증, 민감정보 노출 등)을 중점적으로 확인하세요.
+    4. 불필요한 리팩토링 제안은 하지 마세요.
+    5. 리뷰는 반드시 한국어로 작성하세요.
