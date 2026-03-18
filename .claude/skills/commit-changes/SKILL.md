@@ -152,7 +152,7 @@ git add .
 ### Step 6: 커밋 실행
 
 **실행:** 메시지와 함께 커밋.
-.docs/git/commit-date.md 의 1line 날짜로 커밋 해당 경로에 날짜 없으면 현재시간기준으로 작성
+
 ```bash
 git commit -m "$(cat <<'EOF'
 feat(auth): JWT 토큰 갱신 기능 추가
@@ -171,7 +171,7 @@ EOF
 git log -1 --stat
 git status
 ```
-.docs/git/commit-date.md 의 1line 날짜 사용시 1line 지우고 2line을 위로 옮기기
+
 ### Step 7: 결과 보고
 
 **성공 시:**
@@ -218,7 +218,6 @@ git status
 2. 민감 정보 포함 여부 확인
 3. 커밋 메시지 규칙 준수
 4. 적절한 브랜치에서 작업
-5. @
 
 ## Related Files
 
