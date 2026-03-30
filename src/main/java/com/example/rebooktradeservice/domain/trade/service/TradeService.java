@@ -4,7 +4,6 @@ import com.example.rebooktradeservice.common.enums.State;
 import com.example.rebooktradeservice.common.exception.TradeException;
 import com.example.rebooktradeservice.domain.outbox.OutboxWriter;
 import com.example.rebooktradeservice.domain.trade.model.dto.BundleTradeRequest;
-import com.example.rebooktradeservice.domain.trade.model.dto.BundleTradeRequest.TradeItem;
 import com.example.rebooktradeservice.domain.trade.model.dto.BundleTradeResponse;
 import com.example.rebooktradeservice.domain.trade.model.dto.BundleTradeResponse.CreatedTradeItem;
 import com.example.rebooktradeservice.domain.trade.model.dto.TradeRequest;
@@ -19,7 +18,6 @@ import com.example.rebooktradeservice.external.s3.S3Service;
 import com.example.rebooktradeservice.clientfeign.book.BookClient;
 import com.rebook.common.core.response.PageResponse;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -178,53 +176,23 @@ public class TradeService {
     // ========== Bundle Trade Registration ==========
 
     @Transactional
-    public BundleTradeResponse postBundleTrades(BundleTradeRequest request, String userId, List<MultipartFile> files)
-        throws IOException {
-        // 1. 파일 개수 검증
-        if (files == null || files.size() != request.trades().size()) {
-            throw TradeException.invalidInput("Number of files must match number of trades");
-        }
+    public BundleTradeResponse postBundleTrades(BundleTradeRequest request, String userId) {
+        // 1. 각 TradeItem을 Trade 엔티티로 변환
+        List<Trade> trades = request.trades().stream()
+            .map(item -> item.toEntity(userId))
+            .toList();
 
-        // 2. 각 Trade에 대해 이미지 업로드 및 엔티티 생성
-        List<Trade> trades = new ArrayList<>();
-        List<CreatedTradeItem> createdItems = new ArrayList<>();
-
-        for (int i = 0; i < request.trades().size(); i++) {
-            TradeItem item = request.trades().get(i);
-            MultipartFile file = files.get(i);
-
-            // S3에 이미지 업로드
-            String imageUrl = s3Service.upload(file);
-
-            // Trade 엔티티 생성 (WAITING 상태로 생성)
-            Trade trade = Trade.builder()
-                .bookId(item.bookId())
-                .userId(userId)
-                .title("AI 평가 대기 중")  // 임시 제목
-                .content("AI 평가 대기 중")  // 임시 내용
-                .imageUrl(imageUrl)
-                .rating("PENDING")  // 평가 대기 상태
-                .price(item.price())
-                .state(State.WAITING)
-                .build();
-
-            trades.add(trade);
-        }
-
-        // 3. 일괄 저장
+        // 2. 일괄 저장
         List<Trade> savedTrades = tradeWriter.saveAll(trades);
 
-        // 4. 응답 생성
-        for (int i = 0; i < savedTrades.size(); i++) {
-            Trade savedTrade = savedTrades.get(i);
-            createdItems.add(new CreatedTradeItem(
+        // 3. 응답 생성
+        List<CreatedTradeItem> createdItems = savedTrades.stream()
+            .map(savedTrade -> new CreatedTradeItem(
                 savedTrade.getId(),
                 savedTrade.getBookId(),
                 savedTrade.getImageUrl()
-            ));
-        }
-
-        log.info("Bundle trades created for user {}: {} trades", userId, savedTrades.size());
+            ))
+            .toList();
 
         return new BundleTradeResponse(savedTrades.size(), createdItems);
     }

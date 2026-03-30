@@ -37,7 +37,7 @@ public class GeminiService {
 
   // --- [Private] ---
 
-  //텍스트
+  //프롬프트
   private String executeApi(String prompt) {
     try{
       GenerateContentResponse response = client.models.generateContent(
@@ -47,9 +47,7 @@ public class GeminiService {
       );
 
       String resultText = response.text();
-      if (resultText == null) {
-        throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
-      }
+      valdateEmptyString(resultText == null);
 
       return resultText;
     } catch (Exception e) {
@@ -57,34 +55,28 @@ public class GeminiService {
     }
   }
 
-  // 텍스트 + 이미지
+  // 프롬프트 + 이미지
   private String executeApi(String prompt, List<ImageSource> images) {
-    try {
-      List<Part> parts = new ArrayList<>();
-      parts.add(Part.fromText(prompt));
+    List<Part> parts = new ArrayList<>();
+    parts.add(Part.fromText(prompt));
 
-      if (images != null) {
-        for (ImageSource img : images) {
-          parts.add(Part.fromBytes(img.bytes(), img.mimeType()));
-        }
+    if (images != null) {
+      for (ImageSource img : images) {
+        parts.add(Part.fromBytes(img.bytes(), img.mimeType()));
       }
-
-      GenerateContentResponse response = client.models.generateContent(
-          MODEL,
-          Content.fromParts(parts.toArray(Part[]::new)),
-          null
-      );
-
-      String resultText = response.text();
-      if (resultText == null) throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
-
-      return resultText;
-
-    } catch (Exception e) {
-      throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
     }
-  }
 
+    GenerateContentResponse response = client.models.generateContent(
+        MODEL,
+        Content.fromParts(parts.toArray(Part[]::new)),
+        null
+    );
+
+    String resultText = response.text();
+    if (resultText == null) throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
+
+    return resultText;
+  }
 
 
   private <T> T parseJson(String json, Class<T> clazz) {
@@ -97,7 +89,11 @@ public class GeminiService {
   }
 
   private void validateNotString(Class<?> clazz) {
-    if (clazz.equals(String.class)) {
+    valdateEmptyString(clazz.equals(String.class));
+  }
+
+  private static void valdateEmptyString(boolean resultText) {
+    if (resultText) {
       throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
     }
   }

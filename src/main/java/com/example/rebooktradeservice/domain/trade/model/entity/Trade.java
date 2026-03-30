@@ -44,7 +44,7 @@ public class Trade {
     @Column(nullable = false, length = 800)
     private String content;
 
-    @Column(nullable = false, length = 400)
+    @Column(length = 400)
     private String imageUrl;
 
     @Column(nullable = false, length = 5)

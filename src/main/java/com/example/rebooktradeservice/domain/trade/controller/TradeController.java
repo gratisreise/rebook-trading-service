@@ -139,10 +139,9 @@ public class TradeController {
     @PostMapping("/bundle")
     public ResponseEntity<SuccessResponse<BundleTradeResponse>> postBundleTrades(
         @PassportUser String userId,
-        @RequestPart BundleTradeRequest request,
-        @RequestPart List<MultipartFile> files
-    ) throws IOException {
-        return SuccessResponse.toOk(tradeService.postBundleTrades(request, userId, files));
+        @Valid @RequestBody BundleTradeRequest request
+    ) {
+        return SuccessResponse.toOk(tradeService.postBundleTrades(request, userId));
     }
 
     // ========== AI Condition Assessment ==========

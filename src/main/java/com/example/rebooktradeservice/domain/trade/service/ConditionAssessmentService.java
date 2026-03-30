@@ -25,18 +25,31 @@ public class ConditionAssessmentService {
 
     private static final int REQUIRED_IMAGE_COUNT = 3;
     private static final String GEMINI_PROMPT = """
-        다음 3장의 책 이미지를 분석하여 책의 상태를 평가해주세요.
-
-        평가 기준:
-        - BEST (최상): 새 책 수준, 표면 손상 없음, 페이지 상태 양호
-        - GOOD (상): 약간의 사용감 있으나 전반적으로 양호
-        - MEDIUM (중): 눈에 띄는 사용감, 약간의 손상 있음
-        - POOR (하): 심한 사용감, 눈에 띄는 손상 있음
-
-        반드시 다음 JSON 형식으로만 응답하세요 (다른 텍스트 금지):
+        # Role
+        당신은 중고 도서의 상태를 평가하는 전문가입니다.
+        
+        # Task
+        입력으로 제공된 3장의 책 이미지를 종합적으로 분석하여 도서의 전체 상태를 하나의 등급으로 평가하세요.
+        
+        # Rule
+        1. 모든 이미지를 개별적으로 확인한 뒤, 전체 상태를 종합적으로 판단합니다.
+        2. 표지의 손상 여부(스크래치, 찢김, 오염)를 확인합니다.
+        3. 책등(스파인)의 변형, 주름, 훼손 여부를 확인합니다.
+        4. 페이지의 변색, 찢김, 필기, 접힘 여부를 확인합니다.
+        5. 가장 손상도가 큰 부분을 기준으로 보수적으로 평가합니다.
+        6. 아래 기준에 따라 정확히 하나의 등급만 선택합니다:
+           - BEST: 새 책 수준, 표면 손상 없음, 페이지 상태 양호
+           - GOOD: 약간의 사용감 있으나 전반적으로 양호
+           - MEDIUM: 눈에 띄는 사용감, 약간의 손상 있음
+           - POOR: 심한 사용감, 눈에 띄는 손상 있음
+        
+        # Constraints
+        - 반드시 아래 JSON 형식으로만 응답해야 합니다.
         {
-            "condition": "BEST" 또는 "GOOD" 또는 "MEDIUM" 또는 "POOR"
+          "condition": "BEST" 또는 "GOOD" 또는 "MEDIUM" 또는 "POOR"
         }
+        - JSON 외의 추가 설명, 텍스트, 주석은 절대 포함하지 않습니다.
+        - condition 값은 반드시 4개 중 하나만 선택해야 합니다.
         """;
 
     private final GeminiService geminiService;
@@ -63,8 +76,6 @@ public class ConditionAssessmentService {
 
         // 5. Trade 상태 및 rating 업데이트
         tradeWriter.updateConditionAndState(tradeId, condition, State.AVAILABLE);
-
-        log.info("Trade {} condition assessed as {} and state changed to AVAILABLE", tradeId, condition);
 
         return new ConditionAssessmentResponse(tradeId, condition, State.AVAILABLE);
     }
@@ -105,7 +116,7 @@ public class ConditionAssessmentService {
         try {
             return geminiService.callObjectWithImages(GEMINI_PROMPT, imageSources, GeminiConditionResponse.class);
         } catch (Exception e) {
-            log.error("Gemini API call failed: {}", e.getMessage());
+            log.error("Gemini API 호출 실패: {}", e.getMessage());
             throw TradeException.aiAssessmentFailed("Failed to assess book condition: " + e.getMessage());
         }
     }
