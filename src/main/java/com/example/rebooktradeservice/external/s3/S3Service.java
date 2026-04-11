@@ -1,7 +1,9 @@
 package com.example.rebooktradeservice.external.s3;
 
+import com.example.rebooktradeservice.common.exception.TradeError;
 import com.example.rebooktradeservice.common.exception.TradeException;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,12 +20,18 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @Slf4j
 public class S3Service {
 
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final List<String> ALLOWED_CONTENT_TYPES = List.of(
+        "image/jpeg", "image/png", "image/webp", "image/gif"
+    );
+
     private final S3Client s3Client;
 
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
     public String upload(MultipartFile file) throws IOException {
+        validateFile(file);
         String fileName = "trade/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
         String contentType = file.getContentType();
         String region = "ap-northeast-2";
@@ -43,12 +51,12 @@ public class S3Service {
             log.info("image upload success");
         } catch (RuntimeException e) {
             log.error(e.getMessage());
-            throw TradeException.s3UploadFailed("s3 이미지 업로드에 실패했습니다.");
+            throw new TradeException(TradeError.S3_UPLOAD_FAILED);
         }
 
         String result = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, fileName);
         if (result.isEmpty()) {
-            throw TradeException.s3UploadFailed("s3 이미지 url 생성 실패");
+            throw new TradeException(TradeError.S3_UPLOAD_FAILED);
         }
         log.info("result: {}", result);
         return result;
@@ -63,5 +71,15 @@ public class S3Service {
             .build();
 
         s3Client.deleteObject(deleteObjectRequest);
+    }
+
+    private void validateFile(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new TradeException(TradeError.INVALID_FILE_TYPE);
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new TradeException(TradeError.FILE_SIZE_EXCEEDED);
+        }
     }
 }

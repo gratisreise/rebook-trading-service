@@ -9,13 +9,13 @@ argument-hint: "[선택사항: 특정 파일 또는 성능 영역]"
 
 ## 목적
 
-백엔드 애플리케이션의 성능 최적화를 검증합니다:
+Spring Boot 백엔드 애플리케이션의 성능 최적화를 검증합니다:
 
-1. **캐싱 전략** — Redis, 메모리 캐시 활용
-2. **커넥션 풀** — DB, HTTP 커넥션 재사용
-3. **비동기 처리** — 병렬 실행, 논블로킹 I/O
-4. **메모리 관리** — 누수 방지, 효율적 할당
-5. **쿼리 최적화** — 효율적인 데이터 조회
+1. **캐싱 전략** — Redis, @Cacheable 활용
+2. **커넥션 풀** — HikariCP DB 커넥션 풀 설정
+3. **비동기 처리** — @Async, CompletableFuture 활용
+4. **페이지네이션** — 대용량 데이터 조회 최적화
+5. **외부 API 호출** — Feign 클라이언트 타임아웃 및 재시도
 
 ## 실행 시점
 
@@ -33,170 +33,142 @@ argument-hint: "[선택사항: 특정 파일 또는 성능 영역]"
 
 ```bash
 # 캐싱 패턴 검색
-grep -rn "cache\|Cache\|redis\|Redis" src/ --include="*.ts"
-grep -rn "@Cacheable\|@CacheEvict\|@CachePut" src/ --include="*.java"
-grep -rn "node-cache\|memory-cache\|lru-cache" package.json
+grep -rn "@Cacheable\|@CacheEvict\|@CachePut\|@EnableCaching" src/ --include="*.java"
+grep -rn "RedisTemplate\|StringRedisTemplate\|redisTemplate" src/ --include="*.java"
+grep -rn "spring.cache\|spring.redis" src/main/resources/ --include="*.yaml" --include="*.yml" --include="*.properties"
 ```
 
 **PASS 기준:**
-```javascript
-// 캐싱 적용
-async function getUser(id) {
-  const cacheKey = `user:${id}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+```java
+// Spring Cache 어노테이션 적용
+@Cacheable(value = "trades", key = "#userId + '_' + #pageable.pageNumber")
+public Page<Trade> findByUserId(Long userId, Pageable pageable) { ... }
 
-  const user = await User.findById(id);
-  await redis.setex(cacheKey, 3600, JSON.stringify(user));
-  return user;
-}
+// 캐시 무효화
+@CacheEvict(value = "trades", key = "#userId")
+public void updateTrade(Long userId, ...) { ... }
 ```
-
-**캐싱 권장 대상:**
-- 설정 데이터
-- 사용자 권한 정보
-- 참조 테이블 데이터
-- 계산 비용이 높은 결과
 
 ### Step 2: 커넥션 풀 설정 확인
 
-**검사:** DB, HTTP 커넥션 풀이 적절히 설정되었는지 확인.
+**검사:** HikariCP DB 커넥션 풀이 적절히 설정되었는지 확인.
 
 ```bash
 # 커넥션 풀 설정 검색
-grep -rn "pool\|connectionLimit\|maxConnections\|poolSize" src/ --include="*.ts" --include="*.js"
-grep -rn "connectionPool\|PoolingHttpClient" src/ --include="*.java"
-grep -rn "DATABASE_URL\|DB_POOL" .env* 2>/dev/null
+grep -rn "hikari\|maximum-pool-size\|minimum-idle\|connection-timeout\|pool-name" src/main/resources/ --include="*.yaml" --include="*.yml" --include="*.properties"
+grep -rn "spring.datasource.hikari" src/main/resources/ --include="*.yaml" --include="*.yml"
 ```
 
 **PASS 기준:**
-```javascript
-// DB 커넥션 풀 (MySQL 예시)
-const pool = mysql.createPool({
-  connectionLimit: 10,
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
-
-// HTTP 커넥션 풀 (axios)
-const httpAgent = new http.Agent({
-  keepAlive: true,
-  maxSockets: 50,
-  maxFreeSockets: 10
-});
+```yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 ```
 
-### Step 3: 비동기 병렬 처리 확인
+### Step 3: 비동기 처리 확인
 
-**검사:** 독립적인 작업이 병렬로 실행되는지 확인.
+**검사:** 독립적인 작업이 비동기로 실행되는지 확인.
 
 ```bash
-# 병렬 처리 패턴 검색
-grep -rn "Promise.all\|Promise.allSettled\|parallel\|concurrent" src/ --include="*.ts"
-grep -rn "@Async\|CompletableFuture\|parallelStream" src/ --include="*.java"
+# 비동기 패턴 검색
+grep -rn "@Async\|@EnableAsync\|CompletableFuture\|ExecutorService\|TaskExecutor" src/ --include="*.java"
 ```
 
 **위반 사례:**
-```javascript
-// 순차 실행 (느림)
-const user = await getUser(id);
-const orders = await getOrders(id);
-const reviews = await getReviews(id);
+```java
+// 동기 처리 (느림) — 알림 발행과 응답이 순차 실행
+public TradeResponse createTrade(...) {
+    trade = tradeWriter.save(trade);
+    notificationPublisher.publish(message); // 응답을 지연시킴
+    return new TradeResponse(trade);
+}
 ```
 
 **PASS 기준:**
-```javascript
-// 병렬 실행 (빠름)
-const [user, orders, reviews] = await Promise.all([
-  getUser(id),
-  getOrders(id),
-  getReviews(id)
-]);
+```java
+// @Async로 비동기 알림 발행
+@Async
+public void publishNotification(NotificationTradeMessage message) {
+    rabbitTemplate.convertAndSend(exchange, routingKey, message);
+}
+
+// 또는 CompletableFuture
+CompletableFuture.runAsync(() -> notificationPublisher.publish(message));
 ```
 
-### Step 4: 메모리 누수 패턴 탐지
+### Step 4: 페이지네이션 최적화 확인
 
-**검사:** 메모리 누수 가능성이 있는 패턴 확인.
+**검사:** 대용량 데이터 조회에 페이지네이션이 적용되었는지 확인.
 
 ```bash
-# 위험 패턴 검색
-grep -rn "setInterval\|setTimeout" src/ --include="*.ts" | grep -v "clearInterval\|clearTimeout"
-grep -rn "new Map\|new Set\|{}" src/ --include="*.ts" | head -20
-grep -rn "global\.\|globalThis\." src/ --include="*.ts"
-```
-
-**위반 사항:**
-- clearInterval 없는 setInterval
-- 무한히 증가하는 Map/Set
-- 전역 변수에 데이터 축적
-
-**PASS 기준:**
-```javascript
-// 안전한 interval 사용
-const interval = setInterval(() => {...}, 1000);
-process.on('SIGTERM', () => clearInterval(interval));
-
-// 제한된 캐시
-const cache = new LRU({ max: 1000, maxAge: 3600000 });
-```
-
-### Step 5: 대용량 데이터 처리 확인
-
-**검사:** 스트리밍, 배치 처리 사용 여부.
-
-```bash
-# 스트리밍/배치 패턴 검색
-grep -rn "stream\|Stream\|pipeline\|batch\|chunk" src/ --include="*.ts"
-grep -rn "cursor\|paginate\|limit\|offset" src/ --include="*.ts"
+# 페이지네이션 패턴 검색
+grep -rn "Pageable\|@PageableDefault\|Page<\|PageRequest\|Slice<" src/ --include="*.java"
+grep -rn "findAll\|findBy" src/ --include="*.java" | grep -v "ById"
 ```
 
 **위반 사례:**
-```javascript
-// 메모리에 모두 로드 (위험)
-const allUsers = await User.find({});
-allUsers.forEach(user => processUser(user));
+```java
+// 전체 조회 (메모리 위험)
+List<Trade> trades = tradeRepository.findAll();
 ```
 
 **PASS 기준:**
-```javascript
-// 스트리밍/커서 사용
-const cursor = User.find({}).batchSize(100).cursor();
-for (let doc = await cursor.next(); doc != null; doc = await cursor.next()) {
-  await processUser(doc);
-}
-
-// 또는 페이지네이션
-const batchSize = 100;
-let skip = 0;
-while (true) {
-  const batch = await User.find({}).skip(skip).limit(batchSize);
-  if (batch.length === 0) break;
-  await Promise.all(batch.map(processUser));
-  skip += batchSize;
+```java
+// 페이지네이션 적용
+@GetMapping
+public ListResult<TradeResponse> getTrades(
+    @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+    Page<Trade> trades = tradeRepository.findAll(pageable);
+    return responseService.getPageResponse(trades.map(TradeResponse::new));
 }
 ```
 
-### Step 6: 응답 압축 확인
+### Step 5: Feign 클라이언트 타임아웃 확인
 
-**검사:** 응답 데이터 압축이 적용되었는지 확인.
+**검사:** 외부 API 호출에 타임아웃과 재시도가 설정되어 있는지 확인.
 
 ```bash
-# 압축 미들웨어 검색
-grep -rn "compression\|gzip\|deflate\|brotli" src/ --include="*.ts" package.json
+# Feign 설정 검색
+grep -rn "feign\|FeignClient\|connectTimeout\|readTimeout\|retry" src/ --include="*.java" --include="*.yaml" --include="*.yml"
 ```
 
 **PASS 기준:**
-```javascript
-const compression = require('compression');
-app.use(compression({
-  filter: (req, res) => {
-    if (req.headers['x-no-compression']) return false;
-    return compression.filter(req, res);
-  },
-  threshold: 1024 // 1KB 이상만 압축
-}));
+```yaml
+# application.yaml
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+```
+
+### Step 6: JPA 쿼리 최적화 확인
+
+**검사:** 불필요한 데이터 조회가 없는지 확인.
+
+```bash
+# 쿼리 최적화 패턴 검색
+grep -rn "SELECT\s.*FROM\|@Query" src/ --include="*.java"
+grep -rn "findAll\|findBy.*In(" src/ --include="*.java"
+```
+
+**위반 사례:**
+```java
+// 불필요한 전체 컬럼 조회
+@Query("SELECT t FROM Trade t")
+```
+
+**PASS 기준:**
+```java
+// 필요한 컬럼만 조회 (DTO 프로젝션)
+@Query("SELECT new com.example.TradeResponse(t.id, t.title, t.price) FROM Trade t WHERE t.state = :state")
 ```
 
 ## 결과 출력 형식
@@ -208,17 +180,10 @@ app.use(compression({
 |-----------|------|-----------|
 | 캐싱 전략 | PASS/FAIL | N개 |
 | 커넥션 풀 | PASS/FAIL | N개 |
-| 병렬 처리 | PASS/FAIL | N개 |
-| 메모리 관리 | PASS/FAIL | N개 |
-| 대용량 처리 | PASS/FAIL | N개 |
-| 응답 압축 | PASS/FAIL | N개 |
-
-### 발견된 이슈
-
-| 파일 | 라인 | 문제 | 권장 수정 |
-|------|------|------|-----------|
-| `src/services/report.ts:45` | 순차 실행 | Promise.all로 병렬 처리 |
-| `src/db/connection.ts:10` | 풀 설정 없음 | connectionLimit 추가 |
+| 비동기 처리 | PASS/FAIL | N개 |
+| 페이지네이션 | PASS/FAIL | N개 |
+| Feign 타임아웃 | PASS/FAIL | N개 |
+| JPA 쿼리 | PASS/FAIL | N개 |
 ```
 
 ---
@@ -227,16 +192,16 @@ app.use(compression({
 
 1. **실시간 데이터** — 항상 최신이어야 하는 데이터는 캐싱 부적절
 2. **소량 데이터** — 캐싱 오버헤드가 이득보다 큰 경우
-3. **일회성 작업** — 배치나 스크립트는 풀 불필요
-4. **순차 의존성** — 이전 결과가 필요한 작업은 병렬 불가
-5. **개발 환경** — 로컬 개발에서는 최적화 완화 가능
+3. **순차 의존성** — 이전 결과가 필요한 작업은 비동기 불가
+4. **개발 환경** — 로컬 개발에서는 최적화 완화 가능
+5. **Spring Cloud Config** — 설정 값은 Config Server에서 관리
 
 ## Related Files
 
 | File | Purpose |
 |------|---------|
-| `src/config/cache.ts` | 캐시 설정 |
-| `src/config/database.ts` | DB 커넥션 풀 설정 |
-| `src/services/**/*.ts` | 서비스 레이어 |
-| `src/utils/redis.ts` | Redis 클라이언트 |
-| `src/middleware/compression.ts` | 압축 미들웨어 |
+| `src/.../config/*.java` | 설정 클래스 (캐시, 스케줄러 등) |
+| `src/.../repository/**/*.java` | Repository (쿼리) |
+| `src/.../service/**/*.java` | 서비스 레이어 (비즈니스 로직) |
+| `src/.../clientfeign/**/*.java` | Feign 클라이언트 |
+| `src/main/resources/application*.yaml` | 성능 관련 설정 |

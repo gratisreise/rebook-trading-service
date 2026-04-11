@@ -7,6 +7,7 @@ import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 import com.rebook.common.core.exception.BusinessException;
+import com.rebook.common.core.exception.CommonError;
 import com.rebook.common.core.exception.ErrorCode;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +24,12 @@ public class GeminiService {
   private final ObjectMapper objectMapper;
   private static final String MODEL = "gemini-2.5-flash";
 
-  // --- [Text Only] ---
+  // --- 문자열 반환 ---
   public String callString(String prompt) {
     return executeApi(prompt);
   }
 
-  // --- [Text + Image] ---
+  // --- 객체 반환 ---
   public <T> T callObjectWithImages(String prompt, List<ImageSource> images, Class<T> clazz) {
     validateNotString(clazz);
     String rawResponse = executeApi(prompt, images);
@@ -51,7 +52,7 @@ public class GeminiService {
 
       return resultText;
     } catch (Exception e) {
-      throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
+      throw new BusinessException(CommonError.EXTERNAL_API_ERROR);
     }
   }
 
@@ -73,7 +74,7 @@ public class GeminiService {
     );
 
     String resultText = response.text();
-    if (resultText == null) throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
+    if (resultText == null) throw new BusinessException(CommonError.EXTERNAL_API_ERROR);
 
     return resultText;
   }
@@ -84,7 +85,7 @@ public class GeminiService {
     try {
       return objectMapper.readValue(cleanedJson, clazz);
     } catch (JsonProcessingException e) {
-      throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
+      throw new BusinessException(CommonError.EXTERNAL_API_ERROR);
     }
   }
 
@@ -94,7 +95,7 @@ public class GeminiService {
 
   private static void valdateEmptyString(boolean resultText) {
     if (resultText) {
-      throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
+      throw new BusinessException(CommonError.EXTERNAL_API_ERROR);
     }
   }
 }

@@ -1,5 +1,7 @@
 package com.example.rebooktradeservice.domain.outbox;
 
+import com.example.rebooktradeservice.common.exception.TradeError;
+import com.example.rebooktradeservice.common.exception.TradeException;
 import com.example.rebooktradeservice.external.rabbitmq.message.NotificationTradeMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,12 +22,11 @@ public class OutboxWriter {
     public void save(NotificationTradeMessage message) {
         try {
             String payload = objectMapper.writeValueAsString(message);
-            Outbox outbox = new Outbox();
-            outbox.setPayload(payload);
+            Outbox outbox = Outbox.createNewOutbox(payload);
             outBoxRepository.save(outbox);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize notification message", e);
-            throw new RuntimeException("Failed to serialize notification message", e);
+            throw new TradeException(TradeError.OUTBOX_SAVE_FAILED);
         }
     }
 }

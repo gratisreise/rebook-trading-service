@@ -1,6 +1,7 @@
 package com.example.rebooktradeservice.domain.trade.service.reader;
 
 import com.example.rebooktradeservice.common.enums.State;
+import com.example.rebooktradeservice.common.exception.TradeError;
 import com.example.rebooktradeservice.common.exception.TradeException;
 import com.example.rebooktradeservice.domain.trade.model.entity.Trade;
 import com.example.rebooktradeservice.domain.trade.repository.TradeRepository;
@@ -20,7 +21,7 @@ public class TradeReader {
 
     public Trade findById(Long tradeId) {
         return tradeRepository.findById(tradeId)
-            .orElseThrow(() -> TradeException.notFound("Trade not found with id: " + tradeId));
+            .orElseThrow(() -> new TradeException(TradeError.TRADE_NOT_FOUND));
     }
 
     public boolean existsById(Long tradeId) {

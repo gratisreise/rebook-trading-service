@@ -9,198 +9,181 @@ argument-hint: "[선택사항: 특정 파일 또는 에러 유형]"
 
 ## 목적
 
-백엔드 애플리케이션의 에러 처리 품질을 검증합니다:
+Spring Boot 백엔드 애플리케이션의 에러 처리 품질을 검증합니다:
 
-1. **예외 처리** — try-catch로 모든 예외 포착
-2. **에러 응답** — 일관된 에러 응답 포맷
-3. **로깅** — 적절한 에러 로깅 및 추적
-4. **복구 전략** — graceful degradation 구현
-5. **사용자 피드백** — 명확한 에러 메시지 전달
+1. **도메인 예외** — `TradeException extends BusinessException` (common-core) 사용
+2. **에러 코드 enum** — `TradeError implements ErrorCode`로 도메인별 에러 코드 정의
+3. **글로벌 예외 처리** — common-autoconfigure에서 자동 제공 (개별 @RestControllerAdvice 불필요)
+4. **로깅** — 적절한 에러 로깅 및 컨텍스트
+5. **외부 서비스 에러** — S3, Gemini API, RabbitMQ 호출 에러 처리
 
 ## 실행 시점
 
 - 에러 처리 로직을 추가/수정한 후
 - 새로운 API 엔드포인트 추가 후
-- 외부 서비스 연동 코드 작성 후
+- 외부 서비스 연동 코드 작성 후 (S3, Gemini, RabbitMQ)
 - Pull Request 생성 전
 - 프로덕션 에러 분석 시
 
 ## 워크플로우
 
-### Step 1: try-catch 커버리지 확인
+### Step 1: 도메인 예외 클래스 검증
 
-**검사:** async 함수에 에러 처리가 되어있는지 확인.
+**검사:** `TradeException`이 `BusinessException`을 상속하고, `TradeError`가 `ErrorCode`를 구현하는지 확인.
 
 ```bash
-# async 함수 중 try-catch 없는 것 찾기
-grep -rn "async\s*\w*\s*(" src/ --include="*.ts" | head -30
-grep -rn "await.*catch\|try\s*{" src/ --include="*.ts"
+# 예외 클래스 검색
+grep -rn "extends BusinessException\|implements ErrorCode" src/ --include="*.java"
+find src -name "*Exception.java" -o -name "*Error.java" | grep -v build
+```
+
+**PASS 기준:**
+```java
+// TradeException.java
+import com.rebook.common.core.exception.BusinessException;
+import com.rebook.common.core.exception.ErrorCode;
+
+public class TradeException extends BusinessException {
+    private TradeException(ErrorCode code) {
+        super(code);
+    }
+}
+
+// TradeError.java — 도메인별 에러 코드 enum
+import com.rebook.common.core.exception.ErrorCode;
+
+@Getter
+@AllArgsConstructor
+public enum TradeError implements ErrorCode {
+    TRADE_NOT_FOUND(404, "TRADE_001", "거래를 찾을 수 없습니다."),
+    UNAUTHORIZED(401, "TRADE_002", "권한이 없습니다."),
+    // ... 필요한 에러 코드 추가
+    ;
+
+    private final int status;
+    private final String code;
+    private final String message;
+}
+```
+
+### Step 2: 예외 생성 패턴 검증
+
+**검사:** `new TradeException(TradeError.XXX)` 패턴으로 일관되게 예외를 생성하는지 확인.
+
+```bash
+# 예외 생성 패턴 검색
+grep -rn "new TradeException\|throw.*TradeException\|throw new BusinessException" src/ --include="*.java"
+grep -rn "TradeError\." src/ --include="*.java"
+```
+
+**PASS 기준:**
+```java
+// 기본 패턴 — TradeError enum 사용
+public Trade findById(Long tradeId) {
+    return tradeRepository.findById(tradeId)
+        .orElseThrow(() -> new TradeException(TradeError.TRADE_NOT_FOUND));
+}
+
+// 소유권 검증
+private void validateOwnership(Trade trade, String userId) {
+    if (!trade.getUserId().equals(userId)) {
+        throw new TradeException(TradeError.UNAUTHORIZED);
+    }
+}
 ```
 
 **위반 사례:**
-```javascript
-// 위험!
-async function getUser(id) {
-  const user = await User.findById(id);
-  return user;
-}
+```java
+// 위반 — 임의의 RuntimeException 사용
+throw new RuntimeException("Something went wrong");
+throw new IllegalArgumentException("Invalid input");
 ```
 
-**PASS 기준:**
-```javascript
-// 안전
-async function getUser(id) {
-  try {
-    const user = await User.findById(id);
-    if (!user) throw new NotFoundError('User not found');
-    return user;
-  } catch (error) {
-    logger.error('Failed to get user', { id, error });
-    throw error;
-  }
-}
-```
+### Step 3: TradeError enum 커버리지 확인
 
-### Step 2: 글로벌 에러 핸들러 확인
-
-**검사:** 포착되지 않은 예외를 처리하는 글로벌 핸들러 존재 여부.
+**검사:** 서비스에서 발생 가능한 에러가 TradeError enum에 모두 정의되어 있는지 확인.
 
 ```bash
-# 글로벌 에러 핸들러 패턴 검색
-grep -rn "errorHandler\|app.use.*error\|@ExceptionHandler\|@ControllerAdvice" src/ --include="*.ts" --include="*.java"
-grep -rn "process.on.*uncaughtException\|process.on.*unhandledRejection" src/ --include="*.ts"
+# TradeError enum 값 확인
+grep -rn "TradeError\.\w" src/ --include="*.java" | grep -v "^.*TradeError.java"
 ```
 
-**PASS 기준:**
-```javascript
-// Express 예시
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error', { error: err, path: req.path });
-  res.status(err.status || 500).json({
-    success: false,
-    error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
-  });
-});
+**확인 사항:**
+- NOT_FOUND: 리소스 조회 실패 시
+- UNAUTHORIZED: 소유권 검증 실패 시
+- INVALID_STATE_TRANSITION: 상태 변경 불가 시
+- S3_UPLOAD_FAILED: S3 업로드 실패 시
+- INVALID_IMAGE_COUNT: 이미지 개수 검증 실패 시
+- AI_ASSESSMENT_FAILED: AI 분석 실패 시
 
-// 프로세스 레벨
-process.on('uncaughtException', (err) => {
-  logger.fatal('Uncaught exception', { error: err });
-  process.exit(1);
-});
-```
+### Step 4: 글로벌 예외 처리 확인
 
-### Step 3: 커스텀 에러 클래스 검증
-
-**검사:** 비즈니스 에러를 위한 커스텀 에러 클래스 사용 여부.
+**검사:** 이 프로젝트는 common-autoconfigure에서 글로벌 예외 핸들러를 자동 제공합니다.
 
 ```bash
-# 커스텀 에러 클래스 검색
-grep -rn "class.*Error\|extends Error\|extends AppError" src/ --include="*.ts"
-ls -la src/errors/ src/exceptions/ 2>/dev/null
+# 프로젝트 내 커스텀 @RestControllerAdvice 확인 (있으면 안 됨)
+grep -rn "@RestControllerAdvice\|@ControllerAdvice\|@ExceptionHandler" src/ --include="*.java"
 ```
 
 **PASS 기준:**
-```javascript
-// 커스텀 에러 클래스
-class NotFoundError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'NotFoundError';
-    this.status = 404;
-    this.code = 'NOT_FOUND';
-  }
-}
-
-class ValidationError extends Error {
-  constructor(message, details) {
-    super(message);
-    this.name = 'ValidationError';
-    this.status = 422;
-    this.code = 'VALIDATION_ERROR';
-    this.details = details;
-  }
-}
+```
+✓ 이 프로젝트에 @RestControllerAdvice가 없어야 정상
+✓ common-autoconfigure에서 BusinessException을 자동으로 에러 응답으로 변환
+✓ TradeException(BusinessException)만 던지면 글로벌 핸들러가 자동 처리
 ```
 
-### Step 4: 에러 로깅 품질 확인
+### Step 5: 에러 로깅 품질 확인
 
 **검사:** 로그에 충분한 컨텍스트가 포함되어 있는지 확인.
 
 ```bash
 # 로깅 패턴 검색
-grep -rn "logger\.\|console\.\|log\." src/ --include="*.ts" | grep -i "error"
-grep -rn "winston\|pino\|bunyan\|log4j" src/ --include="*.ts"
+grep -rn "@Slf4j" src/ --include="*.java"
+grep -rn "log\.error\|log\.warn\|log\.info" src/ --include="*.java"
 ```
-
-**위반 사항:**
-- `console.log(error)` — 컨텍스트 없음
-- `logger.error('Error occurred')` — 에러 객체 없음
 
 **PASS 기준:**
-```javascript
-// 좋은 로깅
-logger.error('Failed to create order', {
-  error: error.message,
-  stack: error.stack,
-  userId: user.id,
-  orderId: orderId,
-  request: { body: req.body, params: req.params }
-});
+```java
+// 예외 객체와 함께 로깅
+} catch (RuntimeException e) {
+    log.error(e.getMessage());
+    throw TradeException.s3UploadFailed("s3 이미지 업로드에 실패했습니다.");
+}
+
+// 컨텍스트 포함 로깅
+log.error("Gemini API 호출 실패: {}", e.getMessage());
 ```
 
-### Step 5: 외부 서비스 에러 처리
+### Step 6: 외부 서비스 에러 처리
 
-**검사:** 외부 API/DB 호출에 대한 에러 처리.
+**검사:** S3, Gemini API 호출에 대한 try-catch 및 에러 변환.
 
 ```bash
 # 외부 서비스 호출 패턴 검색
-grep -rn "fetch\|axios\|http\.\|request(" src/ --include="*.ts"
-grep -rn "\.connect\|\.query\|prisma\.\|mongoose\." src/ --include="*.ts"
+grep -rn "try\s*{\|catch\s*(" src/ --include="*.java"
+grep -rn "s3Client\.\|geminiService\.\|rabbitTemplate\." src/ --include="*.java"
 ```
 
 **PASS 기준:**
-```javascript
-// 외부 API 호출 에러 처리
-async function callExternalApi(data) {
-  try {
-    const response = await axios.post(url, data, { timeout: 5000 });
-    return response.data;
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      throw new ServiceUnavailableError('External API unavailable');
-    }
-    if (error.response?.status === 429) {
-      throw new RateLimitError('Rate limit exceeded');
-    }
-    logger.error('External API call failed', { error, data });
-    throw new ExternalServiceError('Failed to call external API');
-  }
+```java
+// S3 업로드 에러 처리
+try {
+    s3Client.putObject(putObjectRequest, ...);
+} catch (RuntimeException e) {
+    log.error(e.getMessage());
+    throw new TradeException(TradeError.S3_UPLOAD_FAILED);
 }
-```
 
-### Step 6: 에러 응답 일관성 확인
-
-**검사:** 모든 에러 응답이 동일한 포맷을 따르는지 확인.
-
-```bash
-# 에러 응답 패턴 검색
-grep -rn "res\.status\|response\.status\|ResponseEntity" src/ --include="*.ts" --include="*.java" | grep -i "error\|fail"
-```
-
-**PASS 기준:**
-```json
-// 일관된 에러 응답 포맷
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "입력값이 올바르지 않습니다",
-    "details": [
-      { "field": "email", "message": "유효한 이메일 형식이 아닙니다" }
-    ]
-  },
-  "requestId": "abc-123-def"
+// Gemini API 에러 처리
+try {
+    return geminiService.callObjectWithImages(...);
+} catch (Exception e) {
+    log.error("Gemini API 호출 실패: {}", e.getMessage());
+    throw new TradeException(TradeError.AI_ASSESSMENT_FAILED);
 }
+
+// 외부 API 공통 에러 — BusinessException 직접 사용
+throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR);
 ```
 
 ## 결과 출력 형식
@@ -210,37 +193,37 @@ grep -rn "res\.status\|response\.status\|ResponseEntity" src/ --include="*.ts" -
 
 | 검사 항목 | 상태 | 발견 이슈 |
 |-----------|------|-----------|
-| try-catch 커버리지 | PASS/FAIL | N개 |
-| 글로벌 핸들러 | PASS/FAIL | N개 |
-| 커스텀 에러 | PASS/FAIL | N개 |
+| 도메인 예외 (TradeException) | PASS/FAIL | N개 |
+| TradeError enum 커버리지 | PASS/FAIL | N개 |
+| 예외 생성 패턴 | PASS/FAIL | N개 |
+| 글로벌 핸들러 (자동 제공) | PASS/FAIL | N개 |
 | 로깅 품질 | PASS/FAIL | N개 |
-| 외부 서비스 | PASS/FAIL | N개 |
-| 응답 일관성 | PASS/FAIL | N개 |
+| 외부 서비스 에러 | PASS/FAIL | N개 |
 
 ### 발견된 이슈
 
 | 파일 | 라인 | 문제 | 권장 수정 |
 |------|------|------|-----------|
-| `src/services/user.ts:45` | try-catch 없음 | async 함수에 에러 처리 추가 |
-| `src/controllers/order.ts:120` | 로깅 부족 | 에러 컨텍스트 추가 |
+| `TradeService.java:45` | RuntimeException 직접 사용 | `new TradeException(TradeError.XXX)`로 변경 |
+| `S3Service.java:20` | try-catch 없음 | S3 호출 에러 처리 추가 |
 ```
 
 ---
 
 ## 예외사항
 
-1. **의도된 예외** — 비즈니스 로직에서 의도적으로 던지는 예외
-2. **테스트 코드** — 테스트에서의 에러 시나리오
-3. **초기화 코드** — 앱 시작 시 에러는 즉시 종료가 적절
-4. **단순 스크립트** — 일회성 스크립트는 간단한 처리 가능
-5. **클로저 내부** — Promise 콜백 등에서 별도 처리 가능
+1. **BusinessException 직접 사용** — GeminiService 등 외부 API 에러에서 `new BusinessException(ErrorCode.EXTERNAL_API_ERROR)` 사용은 허용
+2. **Internal API** — 서비스 간 통신에서는 별도 에러 응답 형식 사용 가능
+3. **테스트 코드** — 테스트에서의 에러 시나리오
+4. **Spring 프레임워크 예외** — 프레임워크 자체가 처리하는 예외
 
 ## Related Files
 
 | File | Purpose |
 |------|---------|
-| `src/middleware/errorHandler.ts` | 글로벌 에러 핸들러 |
-| `src/errors/**/*.ts` | 커스텀 에러 클래스 |
-| `src/utils/logger.ts` | 로깅 유틸리티 |
-| `src/controllers/**/*.ts` | 컨트롤러 파일 |
-| `src/services/**/*.ts` | 서비스 레이어 |
+| `src/.../common/exception/TradeException.java` | 도메인 예외 (BusinessException 상속) |
+| `src/.../common/exception/TradeError.java` | 도메인 에러 코드 enum (ErrorCode 구현) |
+| `src/.../service/**/*.java` | 서비스 레이어 (예외 발생) |
+| `src/.../external/s3/S3Service.java` | S3 업로드 에러 처리 |
+| `src/.../external/gemini/GeminiService.java` | Gemini API 에러 처리 |
+| `src/.../external/rabbitmq/NotificationPublisher.java` | RabbitMQ 에러 처리 |

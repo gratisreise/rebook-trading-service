@@ -52,7 +52,7 @@ public class TradeController {
     @PostMapping
     public ResponseEntity<SuccessResponse<Void>> postTrade(
         @PassportUser String userId,
-        @RequestPart TradeRequest request,
+        @Valid @RequestPart TradeRequest request,
         @RequestPart MultipartFile file)
         throws IOException {
         tradeService.postTrade(request, userId, file);
@@ -78,7 +78,7 @@ public class TradeController {
     @PutMapping("/{tradeId}")
     public ResponseEntity<SuccessResponse<Void>> updateTrade(
         @PathVariable Long tradeId, @PassportUser String userId,
-        @RequestPart TradeRequest request,
+        @Valid @RequestPart TradeRequest request,
         @RequestPart(required = false) MultipartFile file
     ) throws IOException {
         tradeService.updateTrade(request, userId, tradeId, file);

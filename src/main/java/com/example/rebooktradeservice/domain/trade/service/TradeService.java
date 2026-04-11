@@ -1,6 +1,7 @@
 package com.example.rebooktradeservice.domain.trade.service;
 
 import com.example.rebooktradeservice.common.enums.State;
+import com.example.rebooktradeservice.common.exception.TradeError;
 import com.example.rebooktradeservice.common.exception.TradeException;
 import com.example.rebooktradeservice.domain.outbox.OutboxWriter;
 import com.example.rebooktradeservice.domain.trade.model.dto.BundleTradeRequest;
@@ -97,8 +98,7 @@ public class TradeService {
     public void deleteTrade(Long tradeId, String userId) {
         // 1. Trade 존재 여부 확인
         if (!tradeReader.existsById(tradeId)) {
-            log.error("Data is not found");
-            throw TradeException.notFound("Data is not found");
+            throw new TradeException(TradeError.TRADE_NOT_FOUND);
         }
 
         // 2. Trade 조회
@@ -217,8 +217,7 @@ public class TradeService {
 
         // 3. 상태 검증 (AVAILABLE 상태에서만 완료 가능)
         if (trade.getState() != State.AVAILABLE) {
-            throw TradeException.invalidStateTransition(
-                "Trade must be in AVAILABLE state to complete. Current state: " + trade.getState());
+            throw new TradeException(TradeError.INVALID_STATE_TRANSITION);
         }
 
         // 4. 제목과 내용 업데이트
@@ -234,7 +233,7 @@ public class TradeService {
 
     private void validateOwnership(Trade trade, String userId) {
         if (!trade.getUserId().equals(userId)) {
-            throw TradeException.unauthorized("Unauthorized user Access");
+            throw new TradeException(TradeError.UNAUTHORIZED);
         }
     }
 

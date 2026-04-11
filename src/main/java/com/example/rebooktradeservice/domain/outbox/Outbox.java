@@ -11,6 +11,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,6 +21,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Outbox {
 
     @Id
@@ -43,5 +45,12 @@ public class Outbox {
         if (status == null) {
             this.status = MessageStatus.PENDING;
         }
+    }
+
+    public static Outbox createNewOutbox(String payload){
+        return Outbox.builder()
+            .payload(payload)
+            .status(MessageStatus.PENDING)
+            .build();
     }
 }

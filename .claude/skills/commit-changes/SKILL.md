@@ -67,26 +67,17 @@ git diff --cached
 
 ```bash
 # 민감 정보 패턴 검색
-grep -rn "API_KEY\|SECRET\|PASSWORD\|TOKEN\|CREDENTIAL" --include="*.ts" --include="*.js" --include="*.env"
+grep -rn "password\s*=\s*\"\|apiKey\s*=\s*\"\|secret\s*=\s*\"" src/ --include="*.java" --include="*.yaml" --include="*.properties"
+grep -rn "ACCESS_KEY\|SECRET_KEY\|JWT_SECRET\|DATABASE_PASSWORD" src/ --include="*.java" | grep -v "@Value\|@ConfigurationProperty"
 ```
 
 **🚫 제외해야 할 파일:**
 ```
-.env, .env.local, .env.*.local
-credentials.json, secrets.json
-*.pem, *.key
-node_modules/
-dist/, build/
-```
-
-**민감 정보 발견 시:**
-```markdown
-⚠️ 민감 정보가 감지되었습니다:
-
-- `.env`: API_KEY 포함
-- `config/secrets.json`: PASSWORD 포함
-
-이 파일들은 커밋에서 제외해야 합니다.
+.env, .env.local
+application-prod.yaml (자격 증명 포함 시)
+*.pem, *.key, *.jks
+build/
+.gradle/
 ```
 
 ### Step 4: 커밋 메시지 작성
@@ -97,19 +88,17 @@ dist/, build/
 <type>(<scope>): <subject>
 
 [optional body]
-
-[optional footer]
 ```
 
 **Type 종류:**
 | Type | 설명 | 예시 |
 |------|------|------|
-| `feat` | 새로운 기능 | feat(auth): JWT 토큰 갱신 기능 추가 |
+| `feat` | 새로운 기능 | feat(trade): 거래 상태 변경 기능 추가 |
 | `fix` | 버그 수정 | fix(api): 500 에러 응답 처리 수정 |
-| `refactor` | 리팩토링 | refactor(user): 프로필 로직 분리 |
-| `docs` | 문서 수정 | docs: API 명세서 업데이트 |
-| `test` | 테스트 추가/수정 | test(auth): 로그인 테스트 추가 |
-| `chore` | 빌드/설정 변경 | chore: ESLint 설정 업데이트 |
+| `refactor` | 리팩토링 | refactor(service): reader/writer 분리 |
+| `docs` | 문서 수정 | docs: 리드미 수정 |
+| `test` | 테스트 추가/수정 | test(trade): 거래 생성 테스트 추가 |
+| `chore` | 빌드/설정 변경 | chore: CI-CD 추가 |
 | `style` | 코드 스타일 변경 | style: import 문 정렬 |
 | `perf` | 성능 개선 | perf(query): N+1 문제 해결 |
 
@@ -117,7 +106,6 @@ dist/, build/
 ```
 ✓ 제목은 50자 이내
 ✓ 제목은 명령문 형태 (마침표 제외)
-✓ 본문은 72자마다 줄바꿈
 ✓ 무엇을, 왜 변경했는지 설명
 ✓ AI 공동작업자 추가 금지
 ```
@@ -130,12 +118,11 @@ dist/, build/
 ## 커밋할 파일
 
 **변경된 파일:**
-- src/auth/service.ts (수정)
-- src/auth/test.ts (신규)
-- docs/api.md (수정)
+- src/.../service/TradeService.java (수정)
+- src/.../controller/TradeController.java (수정)
 
 **제외할 파일:**
-- .env (민감 정보)
+- (없음)
 
 위 파일들을 커밋하시겠습니까?
 ```
@@ -143,7 +130,7 @@ dist/, build/
 **스테이징 명령:**
 ```bash
 # 개별 파일 스테이징 (권장)
-git add src/auth/service.ts src/auth/test.ts docs/api.md
+git add src/.../service/TradeService.java src/.../controller/TradeController.java
 
 # 전체 스테이징 (주의)
 git add .
@@ -155,11 +142,10 @@ git add .
 
 ```bash
 git commit -m "$(cat <<'EOF'
-feat(auth): JWT 토큰 갱신 기능 추가
+feat(trade): 거래 상태 변경 기능 추가
 
-- 리프레시 토큰을 통한 자동 갱신 구현
-- 토큰 만료 시간 30분으로 설정
-- 갱신 실패 시 로그아웃 처리
+- 거래 상태(판매중/예약중/거래완료) 변경 API 추가
+- 소유권 검증 로직 적용
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
@@ -178,9 +164,9 @@ git status
 ```markdown
 ## 커밋 완료
 
-**브랜치:** feature/auth-jwt
+**브랜치:** dev
 **커밋:** abc1234
-**메시지:** feat(auth): JWT 토큰 갱신 기능 추가
+**메시지:** feat(trade): 거래 상태 변경 기능 추가
 
 **변경사항:**
 - 3 files changed
@@ -200,14 +186,14 @@ git status
 
 1. **빈 커밋** — `git commit --allow-empty`는 특수한 경우에만 허용
 2. **Amend 커밋** — 이미 푸시된 커밋은 amend 금지 (force push 위험)
-3. **대용량 파일** — 바이너리, 대용량 로그 파일은 .gitignore 확인 후 제외
+3. **대용량 파일** — 바이너리 파일은 .gitignore 확인 후 제외
 
 ## 주의사항
 
 🚫 **절대 하지 말 것:**
 
 1. `git add .` 후 확인 없이 커밋
-2. `.env`, 시크릿 파일 커밋
+2. application-prod.yaml 등 시크릿 파일 커밋
 3. main/master 브랜치에 직접 커밋
 4. `git push --force` 사용
 5. 이미 푸시된 커밋 amend

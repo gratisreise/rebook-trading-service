@@ -30,11 +30,11 @@ argument-hint: "[선택사항: 특정 verify 스킬 이름]"
 | # | 스킬 | 설명 |
 |---|------|------|
 | 1 | `verify-api-design` | RESTful API 설계 원칙과 엔드포인트 명명 규칙을 검증 |
-| 2 | `verify-database` | 데이터베이스 쿼리 성능, SQL 인젝션 방어, N+1 문제를 검증 |
+| 2 | `verify-database` | JPA 쿼리 성능, SQL 인젝션 방어, N+1 문제를 검증 |
 | 3 | `verify-security` | 인증/인가, 민감 정보 노출, 입력 검증 등 보안 취약점을 검증 |
 | 4 | `verify-error-handling` | 예외 처리, 에러 응답, 로깅 전략의 일관성을 검증 |
 | 5 | `verify-performance` | 캐싱, 커넥션 풀, 비동기 처리 등 성능 최적화를 검증 |
-| 6 | `verify-testing` | 단위 테스트, 통합 테스트, 테스트 커버리지를 검증 |
+| 6 | `verify-testing` | 단위 테스트, 통합 테스트, Jacoco 커버리지를 검증 |
 
 ## 워크플로우
 
@@ -56,8 +56,6 @@ argument-hint: "[선택사항: 특정 verify 스킬 이름]"
 
 **등록된 스킬이 1개 이상인 경우:**
 
-실행 대상 스킬 테이블의 내용을 표시합니다:
-
 ```markdown
 ## 구현 검증
 
@@ -65,8 +63,8 @@ argument-hint: "[선택사항: 특정 verify 스킬 이름]"
 
 | # | 스킬 | 설명 |
 |---|------|------|
-| 1 | verify-<name1> | <description1> |
-| 2 | verify-<name2> | <description2> |
+| 1 | verify-api-design | RESTful API 설계 원칙 검증 |
+| 2 | verify-database | JPA 쿼리 성능 검증 |
 
 검증 시작...
 ```
@@ -90,14 +88,9 @@ Workflow 섹션에 정의된 각 검사를 순서대로 실행합니다:
 1. 검사에 명시된 도구(Grep, Glob, Read, Bash)를 사용하여 패턴 탐지
 2. 탐지된 결과를 해당 스킬의 PASS/FAIL 기준에 대조
 3. Exceptions 섹션에 해당하는 패턴은 면제 처리
-4. FAIL인 경우 이슈를 기록:
-   - 파일 경로 및 라인 번호
-   - 문제 설명
-   - 수정 권장 사항 (코드 예시 포함)
+4. FAIL인 경우 이슈를 기록
 
 #### 2c. 스킬별 결과 기록
-
-각 스킬 실행 완료 후 진행 상황을 표시합니다:
 
 ```markdown
 ### verify-<name> 검증 완료
@@ -121,8 +114,8 @@ Workflow 섹션에 정의된 각 검사를 순서대로 실행합니다:
 
 | 검증 스킬 | 상태 | 이슈 수 | 상세 |
 |-----------|------|---------|------|
-| verify-<name1> | PASS / X개 이슈 | N | 상세... |
-| verify-<name2> | PASS / X개 이슈 | N | 상세... |
+| verify-api-design | PASS / X개 이슈 | N | 상세... |
+| verify-database | PASS / X개 이슈 | N | 상세... |
 
 **발견된 총 이슈: X개**
 ```
@@ -131,93 +124,31 @@ Workflow 섹션에 정의된 각 검사를 순서대로 실행합니다:
 
 ```markdown
 모든 검증을 통과했습니다!
-
-구현이 프로젝트의 모든 규칙을 준수합니다:
-
-- verify-<name1>: <통과 내용 요약>
-- verify-<name2>: <통과 내용 요약>
-
 코드 리뷰 준비가 완료되었습니다.
 ```
 
 **이슈 발견 시:**
-
-각 이슈를 파일 경로, 문제 설명, 수정 권장 사항과 함께 나열합니다:
 
 ```markdown
 ### 발견된 이슈
 
 | # | 스킬 | 파일 | 문제 | 수정 방법 |
 |---|------|------|------|-----------|
-| 1 | verify-<name1> | `path/to/file.ts:42` | 문제 설명 | 수정 코드 예시 |
-| 2 | verify-<name2> | `path/to/file.tsx:15` | 문제 설명 | 수정 코드 예시 |
+| 1 | verify-security | `TradeService.java:42` | 입력 검증 누락 | @Valid 어노테이션 추가 |
+| 2 | verify-database | `TradeRepository.java:15` | N+1 의심 | FETCH JOIN 추가 |
 ```
 
 ### Step 4: 사용자 액션 확인
 
-이슈가 발견된 경우 `AskUserQuestion`을 사용하여 사용자에게 확인합니다:
-
-```markdown
----
-
-### 수정 옵션
-
-**X개 이슈가 발견되었습니다. 어떻게 진행할까요?**
-
-1. **전체 수정** - 모든 권장 수정사항을 자동으로 적용
-2. **개별 수정** - 각 수정사항을 하나씩 검토 후 적용
-3. **건너뛰기** - 변경 없이 종료
-```
+이슈가 발견된 경우 `AskUserQuestion`을 사용하여 사용자에게 확인합니다.
 
 ### Step 5: 수정 적용
 
 사용자 선택에 따라 수정을 적용합니다.
 
-**"전체 수정" 선택 시:**
-
-모든 수정을 순서대로 적용하며 진행 상황을 표시합니다:
-
-```markdown
-## 수정 적용 중...
-
-- [1/X] verify-<name1>: `path/to/file.ts` 수정 완료
-- [2/X] verify-<name2>: `path/to/file.tsx` 수정 완료
-
-X개 수정 완료.
-```
-
-**"개별 수정" 선택 시:**
-
-각 이슈마다 수정 내용을 보여주고 `AskUserQuestion`으로 승인 여부를 확인합니다.
-
 ### Step 6: 수정 후 재검증
 
-수정이 적용된 경우, 이슈가 있었던 스킬만 다시 실행하여 Before/After를 비교합니다:
-
-```markdown
-## 수정 후 재검증
-
-이슈가 있었던 스킬을 다시 실행합니다...
-
-| 검증 스킬 | 수정 전 | 수정 후 |
-|-----------|---------|---------|
-| verify-<name1> | X개 이슈 | PASS |
-| verify-<name2> | Y개 이슈 | PASS |
-
-모든 검증을 통과했습니다!
-```
-
-**여전히 이슈가 남은 경우:**
-
-```markdown
-### 잔여 이슈
-
-| # | 스킬 | 파일 | 문제 |
-|---|------|------|------|
-| 1 | verify-<name> | `path/to/file.ts:42` | 자동 수정 불가 — 수동 확인 필요 |
-
-수동으로 해결한 후 `/verify-implementation`을 다시 실행하세요.
-```
+수정이 적용된 경우, 이슈가 있었던 스킬만 다시 실행하여 Before/After를 비교합니다.
 
 ---
 
@@ -225,7 +156,7 @@ X개 수정 완료.
 
 다음은 **문제가 아닙니다**:
 
-1. **등록된 스킬이 없는 프로젝트** — 오류가 아닌 안내 메시지를 표시하고 종료
+1. **등록된 스킬이 없는 프로젝트** — 안내 메시지 표시 후 종료
 2. **스킬의 자체적 예외** — 각 verify 스킬의 Exceptions 섹션에 정의된 패턴은 이슈로 보고하지 않음
 3. **verify-implementation 자체** — 실행 대상 스킬 목록에 자기 자신을 포함하지 않음
 4. **manage-skills** — `verify-`로 시작하지 않으므로 실행 대상에 포함되지 않음
@@ -234,5 +165,5 @@ X개 수정 완료.
 
 | File | Purpose |
 |------|---------|
-| `.claude/skills/manage-skills/SKILL.md` | 스킬 유지보수 (이 파일의 실행 대상 스킬 목록을 관리) |
+| `.claude/skills/manage-skills/SKILL.md` | 스킬 유지보수 |
 | `CLAUDE.md` | 프로젝트 지침 |

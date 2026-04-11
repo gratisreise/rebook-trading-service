@@ -2,6 +2,7 @@ package com.example.rebooktradeservice.domain.trade.service;
 
 import com.example.rebooktradeservice.common.enums.BookCondition;
 import com.example.rebooktradeservice.common.enums.State;
+import com.example.rebooktradeservice.common.exception.TradeError;
 import com.example.rebooktradeservice.common.exception.TradeException;
 import com.example.rebooktradeservice.domain.trade.model.dto.ConditionAssessmentResponse;
 import com.example.rebooktradeservice.domain.trade.model.entity.Trade;
@@ -82,21 +83,19 @@ public class ConditionAssessmentService {
 
     private void validateImageCount(List<MultipartFile> files) {
         if (files == null || files.size() != REQUIRED_IMAGE_COUNT) {
-            throw TradeException.invalidImageCount(
-                "Exactly " + REQUIRED_IMAGE_COUNT + " images are required for condition assessment");
+            throw new TradeException(TradeError.INVALID_IMAGE_COUNT);
         }
     }
 
     private void validateOwnership(Trade trade, String userId) {
         if (!trade.getUserId().equals(userId)) {
-            throw TradeException.unauthorized("Unauthorized user Access");
+            throw new TradeException(TradeError.UNAUTHORIZED);
         }
     }
 
     private void validateWaitingState(Trade trade) {
         if (trade.getState() != State.WAITING) {
-            throw TradeException.invalidStateTransition(
-                "Trade must be in WAITING state for assessment. Current state: " + trade.getState());
+            throw new TradeException(TradeError.INVALID_STATE_TRANSITION);
         }
     }
 
@@ -106,7 +105,7 @@ public class ConditionAssessmentService {
                 try {
                     return ImageSource.of(file.getBytes(), file.getContentType());
                 } catch (IOException e) {
-                    throw TradeException.s3UploadFailed("Failed to read image file: " + e.getMessage());
+                    throw new TradeException(TradeError.S3_UPLOAD_FAILED);
                 }
             })
             .toList();
@@ -117,7 +116,7 @@ public class ConditionAssessmentService {
             return geminiService.callObjectWithImages(GEMINI_PROMPT, imageSources, GeminiConditionResponse.class);
         } catch (Exception e) {
             log.error("Gemini API 호출 실패: {}", e.getMessage());
-            throw TradeException.aiAssessmentFailed("Failed to assess book condition: " + e.getMessage());
+            throw new TradeException(TradeError.AI_ASSESSMENT_FAILED);
         }
     }
 }
